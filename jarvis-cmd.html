@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#050b12">
+<title>J.A.R.V.I.S</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root { --c: #1fd6ff; --bg: #050b12; --line: #12384a; --text: #cdf4ff; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    height: 100dvh;
+    background: radial-gradient(ellipse at 50% 28%, #0b2636 0%, var(--bg) 68%);
+    color: var(--text);
+    font-family: 'Share Tech Mono', ui-monospace, monospace;
+    display: flex; flex-direction: column; overflow: hidden;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  /* linhas de varredura */
+  body::after {
+    content: ''; position: fixed; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 3px);
+  }
+  body.listening { --c: #ffb020; }
+  body.thinking  { --c: #b78cff; }
+
+  header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px; border-bottom: 1px solid var(--line);
+  }
+  .title { font-family: 'Orbitron', sans-serif; font-weight: 700; letter-spacing: 4px; color: var(--c); text-shadow: 0 0 12px var(--c); font-size: 15px; }
+  #spk { background: transparent; border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 16px; }
+
+  .stage { display: flex; flex-direction: column; align-items: center; padding: 10px 0 0; }
+  #orb { width: min(46vw, 210px); height: min(46vw, 210px); filter: drop-shadow(0 0 14px var(--c)); }
+  #orb .ring { fill: none; stroke: var(--c); }
+  #orb .g { transform-origin: center; transform-box: fill-box; }
+  .spin1 { animation: spin 16s linear infinite; }
+  .spin2 { animation: spin 11s linear infinite reverse; }
+  .spin3 { animation: spin 24s linear infinite; }
+  .core  { transform-origin: center; transform-box: fill-box; animation: breathe 3.5s ease-in-out infinite alternate; }
+  body.listening .spin1, body.listening .spin2 { animation-duration: 6s; }
+  body.thinking  .spin1 { animation-duration: 2.2s; }
+  body.thinking  .spin2 { animation-duration: 1.6s; }
+  body.thinking  .spin3 { animation-duration: 3s; }
+  body.speaking  .core { animation: talk .45s ease-in-out infinite alternate; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes breathe { from { transform: scale(.88); opacity: .75; } to { transform: scale(1); opacity: 1; } }
+  @keyframes talk { from { transform: scale(.8); } to { transform: scale(1.18); } }
+
+  #status { margin-top: 6px; font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 4px; color: var(--c); text-shadow: 0 0 8px var(--c); }
+
+  #chat { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 88%; padding: 9px 13px; line-height: 1.45; font-size: 15px; border: 1px solid var(--line); border-radius: 4px 14px 14px 14px; background: rgba(10,30,44,.55); }
+  .msg.user { align-self: flex-end; border-radius: 14px 4px 14px 14px; border-color: #1f6a8a; background: rgba(18,67,92,.55); }
+  .msg .who { display: block; font-size: 10px; letter-spacing: 3px; opacity: .6; margin-bottom: 3px; }
+
+  form { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); background: rgba(5,11,18,.8); }
+  input { flex: 1; min-width: 0; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: #08141d; color: var(--text); font-family: inherit; font-size: 16px; }
+  input:focus { outline: none; border-color: var(--c); box-shadow: 0 0 10px -2px var(--c); }
+  button { flex-shrink: 0; font-family: inherit; }
+  #send { padding: 12px 14px; border: 0; border-radius: 10px; background: var(--c); color: #04202e; font-weight: 700; font-size: 15px; }
+  #mic { width: 54px; height: 54px; border-radius: 50%; border: 2px solid var(--c); background: rgba(10,30,44,.8); font-size: 22px; box-shadow: 0 0 14px -2px var(--c); }
+  #mic.on { background: var(--c); }
+</style>
+</head>
+<body>
+  <header>
+    <span class="title">J.A.R.V.I.S</span>
+    <button type="button" id="spk" aria-label="Som">🔊</button>
+  </header>
+
+  <div class="stage">
+    <svg id="orb" viewBox="0 0 200 200" aria-hidden="true">
+      <defs>
+        <radialGradient id="coreGrad">
+          <stop offset="0" style="stop-color:#fff;stop-opacity:.95"/>
+          <stop offset=".3" style="stop-color:var(--c);stop-opacity:.85"/>
+          <stop offset="1" style="stop-color:var(--c);stop-opacity:0"/>
+        </radialGradient>
+      </defs>
+      <circle class="ring" cx="100" cy="100" r="95" stroke-width="1" opacity=".5"/>
+      <g class="g spin1"><circle class="ring" cx="100" cy="100" r="86" stroke-width="3" stroke-dasharray="70 28 12 28"/></g>
+      <g class="g spin2"><circle class="ring" cx="100" cy="100" r="72" stroke-width="2" stroke-dasharray="4 7" opacity=".9"/></g>
+      <g class="g spin3"><circle class="ring" cx="100" cy="100" r="60" stroke-width="5" stroke-dasharray="40 60" opacity=".7"/></g>
+      <circle class="ring" cx="100" cy="100" r="48" stroke-width="1.5" opacity=".8"/>
+      <circle class="core" cx="100" cy="100" r="42" fill="url(#coreGrad)"/>
+    </svg>
+    <div id="status">EM ESPERA</div>
+  </div>
+
+  <div id="chat"></div>
+
+  <form id="form">
+    <input id="input" placeholder="Digite um comando" autocomplete="off">
+    <button type="button" id="mic" aria-label="Falar">🎤</button>
+    <button type="submit" id="send">Enviar</button>
+  </form>
+
+<script>
+  // ====== CONFIGURAÇÃO ======
+  const MODELS = ['gemini-3.5-flash-lite', 'gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3.1-flash-lite']; // tenta em ordem
+  const SYSTEM = 'Você é JARVIS, um assistente pessoal de IA. Responda sempre em português do Brasil, de forma curta, clara e educada.';
+  // ==========================
+
+  const chat = document.getElementById('chat');
+  const form = document.getElementById('form');
+  const input = document.getElementById('input');
+  const statusEl = document.getElementById('status');
+  const history = [];
+
+  // ----- estado visual -----
+  const LABELS = { idle: 'EM ESPERA', listening: 'OUVINDO', thinking: 'PROCESSANDO', speaking: 'FALANDO' };
+  let state = 'idle';
+  function setState(s) {
+    state = s;
+    document.body.className = s === 'idle' ? '' : s;
+    statusEl.textContent = LABELS[s];
+  }
+
+  // ----- chave -----
+  function cleanKey(k) {
+    return (k || '').replace(/[^\x21-\x7E]/g, '');
+  }
+  function getKey() {
+    let key = cleanKey(localStorage.getItem('gemini_key'));
+    if (key.length < 20) {
+      localStorage.removeItem('gemini_key');
+      key = cleanKey(prompt('Cole aqui sua chave da API do Gemini (somente a chave, sem aspas):'));
+      if (key.length < 20) return null;
+      localStorage.setItem('gemini_key', key);
+    }
+    return key;
+  }
+
+  function addMessage(text, who) {
+    const div = document.createElement('div');
+    div.className = 'msg ' + who;
+    const label = document.createElement('span');
+    label.className = 'who';
+    label.textContent = who === 'user' ? 'VOCÊ' : 'JARVIS';
+    const body = document.createElement('span');
+    body.textContent = text;
+    div.append(label, body);
+    div.setText = (t) => { body.textContent = t; };
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+    return div;
+  }
+
+  // ----- IA -----
+  async function askGemini(text) {
+    const key = getKey();
+    if (!key) throw new Error('Chave inválida ou vazia. Envie outra mensagem para colar de novo.');
+    history.push({ role: 'user', parts: [{ text }] });
+    let res, data;
+    for (const model of MODELS) {
+      res = await fetch(
+        'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: SYSTEM }] },
+            contents: history
+          })
+        }
+      );
+      data = await res.json();
+      if (res.ok) break;
+      if (![429, 500, 503, 404].includes(res.status)) break;
+    }
+    if (!res.ok) {
+      history.pop();
+      if (res.status === 400 || res.status === 403) localStorage.removeItem('gemini_key');
+      throw new Error((data.error && data.error.message) || ('Erro ' + res.status));
+    }
+    const reply = data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '(sem resposta)';
+    history.push({ role: 'model', parts: [{ text: reply }] });
+    return reply;
+  }
+
+  // ----- voz (saída) -----
+  const spk = document.getElementById('spk');
+  let soundOn = true;
+  spk.addEventListener('click', () => {
+    soundOn = !soundOn;
+    spk.textContent = soundOn ? '🔊' : '🔇';
+    if (!soundOn) { speechSynthesis.cancel(); if (state === 'speaking') setState('idle'); }
+  });
+
+  function speak(text) {
+    if (!soundOn || !('speechSynthesis' in window)) { setState('idle'); return; }
+    speechSynthesis.cancel();
+    const clean = text.replace(/[*_#`>]/g, '');
+    const u = new SpeechSynthesisUtterance(clean);
+    u.lang = 'pt-BR';
+    const v = speechSynthesis.getVoices().find(v => v.lang === 'pt-BR');
+    if (v) u.voice = v;
+    u.rate = 1.05;
+    u.onstart = () => setState('speaking');
+    u.onend = () => setState('idle');
+    u.onerror = () => setState('idle');
+    speechSynthesis.speak(u);
+  }
+
+  // ----- comandos locais (executados antes de chamar a IA) -----
+  const SITES = {
+    youtube: 'https://www.youtube.com', google: 'https://www.google.com',
+    whatsapp: 'https://wa.me/', gmail: 'https://mail.google.com',
+    maps: 'https://maps.google.com', mapas: 'https://maps.google.com',
+    instagram: 'https://www.instagram.com', spotify: 'https://open.spotify.com',
+    netflix: 'https://www.netflix.com', github: 'https://github.com',
+    facebook: 'https://www.facebook.com', twitter: 'https://x.com'
+  };
+
+  function norm(t) {
+    return t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[.,!?]/g, '').trim();
+  }
+
+  function addLink(label, url) {
+    const div = document.createElement('div');
+    div.className = 'msg bot';
+    const a = document.createElement('a');
+    a.href = url; a.target = '_blank'; a.rel = 'noopener';
+    a.textContent = '↗ ' + label;
+    a.style.color = 'var(--c)';
+    div.appendChild(a);
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function openUrl(label, url) {
+    const w = window.open(url, '_blank');
+    addLink(label + ' (toque aqui se não abriu)', url);
+    return !!w;
+  }
+
+  function beep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.35, 0.7].forEach(t => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.frequency.value = 880; o.connect(g); g.connect(ctx.destination);
+        g.gain.setValueAtTime(0.25, ctx.currentTime + t);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.25);
+        o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.3);
+      });
+    } catch (_) {}
+  }
+
+  function startTimer(n, unit) {
+    const mult = { segundo: 1, minuto: 60, hora: 3600 }[unit];
+    const nome = n + ' ' + unit + (n > 1 ? 's' : '');
+    setTimeout(() => {
+      beep();
+      if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+      const msg = 'Tempo esgotado: ' + nome + '.';
+      addMessage(msg, 'bot');
+      speak(msg);
+    }, n * mult * 1000);
+    return 'Timer de ' + nome + ' iniciado. Mantenha esta tela aberta.';
+  }
+
+  function handleCommand(raw) {
+    const t = norm(raw);
+    let m;
+
+    if (/(que horas|horas sao|hora certa|qual a hora|qual e a hora)/.test(t)) {
+      const d = new Date(), h = d.getHours(), mi = d.getMinutes();
+      return (h === 1 ? 'É 1 hora' : 'São ' + h + ' horas') + (mi ? ' e ' + mi + ' minuto' + (mi > 1 ? 's' : '') : '') + '.';
+    }
+    if (/(que dia (e )?hoje|data de hoje|qual (e )?a data|dia da semana)/.test(t)) {
+      return 'Hoje é ' + new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + '.';
+    }
+    if (/(timer|temporizador|cronometro|me avisa|me avise|me lembra|me lembre)/.test(t) && (m = t.match(/(\d+)\s*(segundo|minuto|hora)/))) {
+      return startTimer(parseInt(m[1], 10), m[2]);
+    }
+    if ((m = t.match(/^(?:pesquisar|pesquisa|procurar|procura|buscar|busca)(?: no google)?(?: por| sobre)?\s+(.+)/))) {
+      openUrl('Pesquisa: ' + m[1], 'https://www.google.com/search?q=' + encodeURIComponent(m[1]));
+      return 'Pesquisando ' + m[1] + ' no Google.';
+    }
+    if ((m = t.match(/^(?:tocar|toca|tocar musica|coloca|colocar|bota|botar)\s+(.+)/))) {
+      openUrl('YouTube: ' + m[1], 'https://www.youtube.com/results?search_query=' + encodeURIComponent(m[1]));
+      return 'Procurando ' + m[1] + ' no YouTube.';
+    }
+    if ((m = t.match(/^(?:abrir|abre|abra)\s+(?:o |a |os |as )?(.+)/))) {
+      const alvo = m[1].replace(/\s+/g, '');
+      const url = SITES[alvo];
+      if (url) { openUrl(m[1], url); return 'Abrindo ' + m[1] + '.'; }
+      openUrl('Pesquisa: ' + m[1], 'https://www.google.com/search?q=' + encodeURIComponent(m[1]));
+      return 'Não conheço "' + m[1] + '", então pesquisei no Google.';
+    }
+    if (/^(limpar|apagar)\s+(a )?(conversa|tela|historico)/.test(t)) {
+      chat.innerHTML = ''; history.length = 0;
+      return 'Conversa limpa.';
+    }
+    if (/(o que voce faz|quais (sao )?(os )?comandos|^ajuda$)/.test(t)) {
+      return 'Posso dizer a hora e a data, abrir sites (abrir YouTube), pesquisar no Google, tocar músicas no YouTube, criar timers (timer de 5 minutos) e conversar sobre qualquer assunto.';
+    }
+    return null;
+  }
+
+  // ----- enviar -----
+  async function send(text) {
+    text = text.trim();
+    if (!text) return;
+    speechSynthesis.cancel();
+    addMessage(text, 'user');
+    input.value = '';
+    const local = handleCommand(text);
+    if (local) {
+      addMessage(local, 'bot');
+      speak(local);
+      return;
+    }
+    const waiting = addMessage('...', 'bot');
+    setState('thinking');
+    try {
+      const reply = await askGemini(text);
+      waiting.setText(reply);
+      speak(reply);
+    } catch (err) {
+      waiting.setText('Erro: ' + err.message);
+      setState('idle');
+    }
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    send(input.value);
+  });
+
+  // ----- voz (entrada) -----
+  const mic = document.getElementById('mic');
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    mic.style.display = 'none';
+    addMessage('Este navegador não suporta reconhecimento de voz. Use o Chrome.', 'bot');
+  } else {
+    const rec = new SR();
+    rec.lang = 'pt-BR';
+    rec.interimResults = false;
+    rec.onstart = () => { mic.classList.add('on'); setState('listening'); };
+    rec.onend = () => { mic.classList.remove('on'); if (state === 'listening') setState('idle'); };
+    rec.onresult = (e) => send(e.results[0][0].transcript);
+    rec.onerror = (e) => { addMessage('Erro do microfone: ' + e.error, 'bot'); setState('idle'); };
+    mic.addEventListener('click', () => {
+      speechSynthesis.cancel();
+      try { rec.start(); } catch (_) { rec.stop(); }
+    });
+  }
+
+  addMessage('Olá! Sistemas online. Como posso ajudar?', 'bot');
+</script>
+</body>
+</html>
