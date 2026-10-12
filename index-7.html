@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JARVIS</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: #0a1118;
+    color: #d8f3ff;
+    font-family: system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+  header { padding: 14px 16px; border-bottom: 1px solid #1d3a4d; font-weight: 600; letter-spacing: 2px; }
+  #chat { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; line-height: 1.4; }
+  .user { align-self: flex-end; background: #12435c; }
+  .bot { align-self: flex-start; background: #14232e; border: 1px solid #1d3a4d; }
+  form { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #1d3a4d; }
+  input { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #1d3a4d; background: #0f1b24; color: inherit; font-size: 16px; }
+  button { padding: 12px 18px; border: 0; border-radius: 10px; background: #1fb6ff; color: #04202e; font-weight: 600; font-size: 16px; }
+  #mic { background: #14232e; border: 1px solid #1d3a4d; padding: 12px 14px; }
+  #mic.on { background: #ff4d4d; }
+</style>
+</head>
+<body>
+  <header>JARVIS</header>
+  <div id="chat"></div>
+  <form id="form">
+    <input id="input" placeholder="Digite uma mensagem" autocomplete="off">
+    <button type="button" id="mic" aria-label="Falar">🎤</button>
+    <button type="submit">Enviar</button>
+  </form>
+
+<script>
+  // ====== CONFIGURAÇÃO ======
+  const MODELS = ['gemini-3.5-flash-lite', 'gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3.1-flash-lite']; // tenta em ordem
+  const SYSTEM = 'Você é JARVIS, um assistente pessoal de IA. Responda sempre em português do Brasil, de forma curta, clara e educada.';
+  // ==========================
+
+  const chat = document.getElementById('chat');
+  const form = document.getElementById('form');
+  const input = document.getElementById('input');
+  const history = [];
+
+  function cleanKey(k) {
+    return (k || '').replace(/[^\x21-\x7E]/g, ''); // remove espaços e caracteres invalidos
+  }
+
+  function getKey() {
+    let key = cleanKey(localStorage.getItem('gemini_key'));
+    if (key.length < 20) {
+      localStorage.removeItem('gemini_key');
+      key = cleanKey(prompt('Cole aqui sua chave da API do Gemini (somente a chave, sem aspas):'));
+      if (key.length < 20) return null;
+      localStorage.setItem('gemini_key', key);
+    }
+    return key;
+  }
+
+  function addMessage(text, who) {
+    const div = document.createElement('div');
+    div.className = 'msg ' + who;
+    div.textContent = text;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+    return div;
+  }
+
+  async function askGemini(text) {
+    const key = getKey();
+    if (!key) throw new Error('Chave inválida ou vazia. Envie outra mensagem para colar de novo.');
+    history.push({ role: 'user', parts: [{ text }] });
+    let res, data;
+    for (const model of MODELS) {
+      res = await fetch(
+        'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: SYSTEM }] },
+            contents: history
+          })
+        }
+      );
+      data = await res.json();
+      if (res.ok) break;
+      // modelo ocupado, limite ou inexistente: tenta o proximo
+      if (![429, 500, 503, 404].includes(res.status)) break;
+    }
+    if (!res.ok) {
+      history.pop();
+      if (res.status === 400 || res.status === 403) localStorage.removeItem('gemini_key');
+      throw new Error((data.error && data.error.message) || ('Erro ' + res.status));
+    }
+    const reply = data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '(sem resposta)';
+    history.push({ role: 'model', parts: [{ text: reply }] });
+    return reply;
+  }
+
+  async function send(text) {
+    text = text.trim();
+    if (!text) return;
+    addMessage(text, 'user');
+    input.value = '';
+    const waiting = addMessage('...', 'bot');
+    try {
+      waiting.textContent = await askGemini(text);
+    } catch (err) {
+      waiting.textContent = 'Erro: ' + err.message;
+    }
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    send(input.value);
+  });
+
+  // ====== VOZ (entrada) ======
+  const mic = document.getElementById('mic');
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    mic.style.display = 'none';
+    addMessage('Este navegador não suporta reconhecimento de voz. Use o Chrome.', 'bot');
+  } else {
+    const rec = new SR();
+    rec.lang = 'pt-BR';
+    rec.interimResults = false;
+    rec.onstart = () => mic.classList.add('on');
+    rec.onend = () => mic.classList.remove('on');
+    rec.onresult = (e) => send(e.results[0][0].transcript);
+    rec.onerror = (e) => addMessage('Erro do microfone: ' + e.error, 'bot');
+    mic.addEventListener('click', () => {
+      try { rec.start(); } catch (_) { rec.stop(); }
+    });
+  }
+
+  addMessage('Olá! Sistemas online. Como posso ajudar?', 'bot');
+</script>
+</body>
+</html>
